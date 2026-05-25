@@ -5,7 +5,10 @@
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:5173)",
       "Bash(python3 -c \"from PIL import Image; print\\('PIL ok'\\)\")",
       "Bash(node -e \"require\\('sharp'\\); console.log\\('sharp ok'\\)\")",
-      "Bash(python3 -)"
+      "Bash(python3 -)",
+      "Bash(python3 -c \"import json,sys; p=json.load\\(sys.stdin\\); print\\('deps:', list\\(p.get\\('dependencies',{}\\).keys\\(\\)\\)\\); print\\('peers:', list\\(p.get\\('peerDependencies',{}\\).keys\\(\\)\\)[:10]\\); print\\('optional peers:', list\\(p.get\\('peerDependenciesMeta',{}\\).keys\\(\\)\\)[:10]\\)\")",
+      "Bash(pnpm install *)",
+      "Bash(pnpm build *)"
     ]
   }
 }

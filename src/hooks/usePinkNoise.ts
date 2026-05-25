@@ -5,20 +5,33 @@ type State = 'idle' | 'playing' | 'loading';
 
 const FADE_DURATION = 0.4; // seconds
 
+/**
+ * A 100 ms loop of silence (8-bit, 8 kHz, mono WAV) encoded as a data URI.
+ *
+ * iOS Safari suspends AudioContext when the screen locks UNLESS an
+ * HTMLMediaElement is actively playing, which forces the audio session into
+ * the "playback" category and keeps background audio alive.  Playing this
+ * inaudible clip in a loop is the standard fix for Web Audio on iOS.
+ */
+const SILENT_WAV =
+  'data:audio/wav;base64,UklGRkQDAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YSADAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgA==';
+
 export function usePinkNoise() {
   const [state, setState] = useState<State>('idle');
   const ctxRef = useRef<AudioContext | null>(null);
   const nodeRef = useRef<AudioWorkletNode | null>(null);
   const gainRef = useRef<GainNode | null>(null);
+  const silentAudioRef = useRef<HTMLAudioElement | null>(null);
   const workletReadyRef = useRef(false);
   const isPlayingRef = useRef(false);
   const { acquire: acquireWakeLock, release: releaseWakeLock } = useWakeLock();
 
-  // Resume AudioContext when page regains visibility (iOS suspends it)
+  // Resume AudioContext when page regains visibility (belt-and-suspenders for iOS)
   useEffect(() => {
     const onVisible = () => {
       if (document.visibilityState === 'visible' && isPlayingRef.current) {
         ctxRef.current?.resume().catch(() => {});
+        silentAudioRef.current?.play().catch(() => {});
         acquireWakeLock();
       }
     };
@@ -68,6 +81,14 @@ export function usePinkNoise() {
       gain.gain.setValueAtTime(0, now);
       gain.gain.linearRampToValueAtTime(1, now + FADE_DURATION);
 
+      // Start the silent audio element — this forces iOS into the "playback"
+      // audio session category so the AudioContext survives screen lock.
+      if (!silentAudioRef.current) {
+        silentAudioRef.current = new Audio(SILENT_WAV);
+        silentAudioRef.current.loop = true;
+      }
+      await silentAudioRef.current.play();
+
       isPlayingRef.current = true;
       setState('playing');
       await acquireWakeLock();
@@ -89,12 +110,14 @@ export function usePinkNoise() {
 
     isPlayingRef.current = false;
     setState('idle');
+    silentAudioRef.current?.pause();
     releaseWakeLock();
   }, [releaseWakeLock]);
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
+      silentAudioRef.current?.pause();
       ctxRef.current?.close();
     };
   }, []);

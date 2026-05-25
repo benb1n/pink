@@ -4,7 +4,8 @@ frontend:
     preBuild:
       commands:
         - npm install -g pnpm
-        - pnpm install
+        - pnpm config set store-dir ~/.pnpm-store
+        - pnpm install --frozen-lockfile
     build:
       commands:
         - pnpm build
@@ -14,4 +15,4 @@ frontend:
       - '**/*'
   cache:
     paths:
-      - node_modules/**/*
+      - ~/.pnpm-store/**/*
